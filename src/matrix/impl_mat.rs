@@ -1,13 +1,13 @@
+use libnum::{Float, FromPrimitive, One, Zero};
 use std::any::Any;
 use std::fmt;
-use libnum::{One, Zero, Float, FromPrimitive};
 
-use super::{Matrix};
-use super::{Axes};
 use super::base::BaseMatrix;
+use super::Axes;
+use super::Matrix;
 use error::{Error, ErrorKind};
-use vector::Vector;
 use matrix::decomposition::PartialPivLu;
+use vector::Vector;
 
 impl<T> Matrix<T> {
     /// Constructor for Matrix struct.
@@ -31,8 +31,7 @@ impl<T> Matrix<T> {
     pub fn new<U: Into<Vec<T>>>(rows: usize, cols: usize, data: U) -> Matrix<T> {
         let our_data = data.into();
 
-        assert!(cols * rows == our_data.len(),
-                "Data does not match given dimensions.");
+        assert!(cols * rows == our_data.len(), "Data does not match given dimensions.");
         Matrix {
             cols: cols,
             rows: rows,
@@ -55,16 +54,17 @@ impl<T> Matrix<T> {
     /// // Let's assume you have an array of "things" for
     /// // which you want to generate a distance matrix:
     /// let things: [i32; 3] = [1, 2, 3];
-    /// let distances: Matrix<f64> = Matrix::from_fn(things.len(), things.len(), |col, row| {
-    ///     (things[col] - things[row]).abs().into()
+    /// let stuff: [i32; 2] = [4, 5];
+    /// let distances: Matrix<f64> = Matrix::from_fn(things.len(), stuff.len(), |row, col| {
+    ///     (stuff[col] - things[row]).abs().into()
     /// });
     ///
     /// assert_eq!(distances.rows(), 3);
-    /// assert_eq!(distances.cols(), 3);
+    /// assert_eq!(distances.cols(), 2);
     /// assert_eq!(distances.data(), &vec![
-    ///     0.0, 1.0, 2.0,
-    ///     1.0, 0.0, 1.0,
-    ///     2.0, 1.0, 0.0,
+    ///     3.0, 4.0,
+    ///     2.0, 3.0,
+    ///     1.0, 2.0,
     /// ]);
     /// ```
     /// # Warning
@@ -72,12 +72,13 @@ impl<T> Matrix<T> {
     /// _This function will be changed in a future release so that `A_ij = f(i, j)` - to be consistent
     /// with the rest of the library._
     pub fn from_fn<F>(rows: usize, cols: usize, mut f: F) -> Matrix<T>
-        where F: FnMut(usize, usize) -> T
+    where
+        F: FnMut(usize, usize) -> T,
     {
         let mut data = Vec::with_capacity(rows * cols);
         for row in 0..rows {
             for col in 0..cols {
-                data.push(f(col, row));
+                data.push(f(row, col));
             }
         }
         Matrix::new(rows, cols, data)
@@ -115,7 +116,7 @@ impl<T: Clone + Zero> Matrix<T> {
         Matrix {
             cols: cols,
             rows: rows,
-            data: vec![T::zero(); cols*rows],
+            data: vec![T::zero(); cols * rows],
         }
     }
 
@@ -138,11 +139,7 @@ impl<T: Clone + Zero> Matrix<T> {
             data[i * (size + 1)] = item.clone();
         }
 
-        Matrix {
-            cols: size,
-            rows: size,
-            data: data,
-        }
+        Matrix { cols: size, rows: size, data: data }
     }
 }
 
@@ -162,7 +159,7 @@ impl<T: Clone + One> Matrix<T> {
         Matrix {
             cols: cols,
             rows: rows,
-            data: vec![T::one(); cols*rows],
+            data: vec![T::one(); cols * rows],
         }
     }
 }
@@ -186,11 +183,7 @@ impl<T: Clone + Zero + One> Matrix<T> {
             data[(i * (size + 1)) as usize] = T::one();
         }
 
-        Matrix {
-            cols: size,
-            rows: size,
-            data: data,
-        }
+        Matrix { cols: size, rows: size, data: data }
     }
 }
 
@@ -282,9 +275,11 @@ impl<T: Float + FromPrimitive> Matrix<T> {
         }
 
         if n < 2 {
-            return Err(Error::new(ErrorKind::InvalidArg,
-                                  "There must be at least two rows or columns in the working \
-                                   axis."));
+            return Err(Error::new(
+                ErrorKind::InvalidArg,
+                "There must be at least two rows or columns in the working \
+                 axis.",
+            ));
         }
 
         let mut variance = Vector::zeros(m);
@@ -300,7 +295,6 @@ impl<T: Float + FromPrimitive> Matrix<T> {
                         Axes::Row => *self.data.get_unchecked(i * m + j),
                         Axes::Col => *self.data.get_unchecked(j * n + i),
                     }
-
                 }
             }
 
@@ -414,15 +408,12 @@ impl<T: Any + Float> Matrix<T> {
         } else if n == 2 {
             (self[[0, 0]] * self[[1, 1]]) - (self[[0, 1]] * self[[1, 0]])
         } else if n == 3 {
-            (self[[0, 0]] * self[[1, 1]] * self[[2, 2]]) +
-            (self[[0, 1]] * self[[1, 2]] * self[[2, 0]]) +
-            (self[[0, 2]] * self[[1, 0]] * self[[2, 1]]) -
-            (self[[0, 0]] * self[[1, 2]] * self[[2, 1]]) -
-            (self[[0, 1]] * self[[1, 0]] * self[[2, 2]]) -
-            (self[[0, 2]] * self[[1, 1]] * self[[2, 0]])
+            (self[[0, 0]] * self[[1, 1]] * self[[2, 2]]) + (self[[0, 1]] * self[[1, 2]] * self[[2, 0]]) + (self[[0, 2]] * self[[1, 0]] * self[[2, 1]])
+                - (self[[0, 0]] * self[[1, 2]] * self[[2, 1]])
+                - (self[[0, 1]] * self[[1, 0]] * self[[2, 2]])
+                - (self[[0, 2]] * self[[1, 1]] * self[[2, 0]])
         } else {
-            PartialPivLu::decompose(self).map(|lu| lu.det())
-                                         .unwrap_or(T::zero())
+            PartialPivLu::decompose(self).map(|lu| lu.det()).unwrap_or(T::zero())
         }
     }
 }
@@ -442,13 +433,9 @@ impl<T: fmt::Display> fmt::Display for Matrix<T> {
         }
         let width = max_datum_width;
 
-        fn write_row<T>(f: &mut fmt::Formatter,
-                        row: &[T],
-                        left_delimiter: &str,
-                        right_delimiter: &str,
-                        width: usize)
-                        -> Result<(), fmt::Error>
-            where T: fmt::Display
+        fn write_row<T>(f: &mut fmt::Formatter, row: &[T], left_delimiter: &str, right_delimiter: &str, width: usize) -> Result<(), fmt::Error>
+        where
+            T: fmt::Display,
         {
             try!(write!(f, "{}", left_delimiter));
             for (index, datum) in row.iter().enumerate() {
@@ -470,28 +457,33 @@ impl<T: fmt::Display> fmt::Display for Matrix<T> {
         match self.rows {
             1 => write_row(f, &self.data, "[", "]", width),
             _ => {
-                try!(write_row(f,
-                               &self.data[0..self.cols],
-                               "⎡", // \u{23a1} LEFT SQUARE BRACKET UPPER CORNER
-                               "⎤", // \u{23a4} RIGHT SQUARE BRACKET UPPER CORNER
-                               width));
+                try!(write_row(
+                    f,
+                    &self.data[0..self.cols],
+                    "⎡", // \u{23a1} LEFT SQUARE BRACKET UPPER CORNER
+                    "⎤", // \u{23a4} RIGHT SQUARE BRACKET UPPER CORNER
+                    width
+                ));
                 try!(f.write_str("\n"));
                 for row_index in 1..self.rows - 1 {
-                    try!(write_row(f,
-                                   &self.data[row_index * self.cols..(row_index + 1) * self.cols],
-                                   "⎢", // \u{23a2} LEFT SQUARE BRACKET EXTENSION
-                                   "⎥", // \u{23a5} RIGHT SQUARE BRACKET EXTENSION
-                                   width));
+                    try!(write_row(
+                        f,
+                        &self.data[row_index * self.cols..(row_index + 1) * self.cols],
+                        "⎢", // \u{23a2} LEFT SQUARE BRACKET EXTENSION
+                        "⎥", // \u{23a5} RIGHT SQUARE BRACKET EXTENSION
+                        width
+                    ));
                     try!(f.write_str("\n"));
                 }
-                write_row(f,
-                          &self.data[(self.rows - 1) * self.cols..self.rows * self.cols],
-                          "⎣", // \u{23a3} LEFT SQUARE BRACKET LOWER CORNER
-                          "⎦", // \u{23a6} RIGHT SQUARE BRACKET LOWER CORNER
-                          width)
+                write_row(
+                    f,
+                    &self.data[(self.rows - 1) * self.cols..self.rows * self.cols],
+                    "⎣", // \u{23a3} LEFT SQUARE BRACKET LOWER CORNER
+                    "⎦", // \u{23a6} RIGHT SQUARE BRACKET LOWER CORNER
+                    width,
+                )
             }
         }
-
     }
 }
 
@@ -530,6 +522,16 @@ mod tests {
     }
 
     #[test]
+    fn test_mat_from_fn_is_row_major() {
+        let rows = 3;
+        let cols = 4;
+        let m: Matrix<usize> = Matrix::from_fn(rows, cols, |r, c| r * cols + c);
+        assert!(m.rows() == rows);
+        assert!(m.cols() == cols);
+        assert!(m.data == &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    }
+
+    #[test]
     fn test_equality() {
         // well, "PartialEq", at least
         let a = matrix![1., 2., 3.;
@@ -559,7 +561,7 @@ mod tests {
                                     1.618, 0.5772, 1.3;
                                     2.68545, 1.282, 10000.];
         let second_exp = "⎡   3.14   2.718   1.414⎤\n⎢  2.503   4.669   1.202⎥\n⎢  \
-                        1.618  0.5772     1.3⎥\n⎣2.68545   1.282   10000⎦";
+                          1.618  0.5772     1.3⎥\n⎣2.68545   1.282   10000⎦";
         assert_eq!(second_exp, format!("{}", second_matrix));
     }
 
@@ -573,13 +575,12 @@ mod tests {
     fn test_display_formatting_precision() {
         let our_matrix = matrix![1.2, 1.23, 1.234;
                                  1.2345, 1.23456, 1.234567];
-        let expectations = vec!["⎡1.2 1.2 1.2⎤\n⎣1.2 1.2 1.2⎦",
-
-                                "⎡1.20 1.23 1.23⎤\n⎣1.23 1.23 1.23⎦",
-
-                                "⎡1.200 1.230 1.234⎤\n⎣1.234 1.235 1.235⎦",
-
-                                "⎡1.2000 1.2300 1.2340⎤\n⎣1.2345 1.2346 1.2346⎦"];
+        let expectations = vec![
+            "⎡1.2 1.2 1.2⎤\n⎣1.2 1.2 1.2⎦",
+            "⎡1.20 1.23 1.23⎤\n⎣1.23 1.23 1.23⎦",
+            "⎡1.200 1.230 1.234⎤\n⎣1.234 1.235 1.235⎦",
+            "⎡1.2000 1.2300 1.2340⎤\n⎣1.2345 1.2346 1.2346⎦",
+        ];
 
         for (places, &expectation) in (1..5).zip(expectations.iter()) {
             assert_eq!(expectation, format!("{:.1$}", our_matrix, places));
