@@ -6,28 +6,28 @@
 //! Most of the logic for manipulating matrices is generically implemented
 //! via `BaseMatrix` and `BaseMatrixMut` trait.
 
+use libnum::Float;
 use std;
 use std::marker::PhantomData;
-use libnum::Float;
 
 use error::{Error, ErrorKind};
 use vector::Vector;
 
 use utils;
 
-pub mod decomposition;
 mod base;
+pub mod decomposition;
 mod deref;
 mod impl_mat;
 mod impl_ops;
+mod impl_permutation_mul;
 mod iter;
 mod mat_mul;
-mod slice;
 mod permutation_matrix;
-mod impl_permutation_mul;
+mod slice;
 
 pub use self::base::{BaseMatrix, BaseMatrixMut};
-pub use self::permutation_matrix::{PermutationMatrix, Parity};
+pub use self::permutation_matrix::{Parity, PermutationMatrix};
 
 /// Matrix dimensions
 #[derive(Debug, Clone, Copy)]
@@ -134,7 +134,7 @@ pub struct RowMut<'a, T: 'a> {
 }
 
 /// Row iterator.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Rows<'a, T: 'a> {
     slice_start: *const T,
     row_pos: usize,
@@ -145,7 +145,7 @@ pub struct Rows<'a, T: 'a> {
 }
 
 /// Mutable row iterator.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RowsMut<'a, T: 'a> {
     slice_start: *mut T,
     row_pos: usize,
@@ -316,23 +316,22 @@ pub struct SliceIterMut<'a, T: 'a> {
 /// Here U is an upper triangular matrix and y a vector
 /// which is dimensionally compatible with U.
 fn back_substitution<T, M>(u: &M, y: Vector<T>) -> Result<Vector<T>, Error>
-    where T: Float,
-          M: BaseMatrix<T>
+where
+    T: Float,
+    M: BaseMatrix<T>,
 {
     assert!(u.rows() == u.cols(), "Matrix U must be square.");
-    assert!(y.size() == u.rows(),
-        "Matrix and RHS vector must be dimensionally compatible.");
+    assert!(y.size() == u.rows(), "Matrix and RHS vector must be dimensionally compatible.");
     let mut x = y;
 
     let n = u.rows();
-    for i in (0 .. n).rev() {
+    for i in (0..n).rev() {
         let row = u.row(i);
 
         // TODO: Remove unsafe once `get` is available in `BaseMatrix`
         let divisor = unsafe { u.get_unchecked([i, i]).clone() };
         if divisor.abs() < T::epsilon() {
-            return Err(Error::new(ErrorKind::DivByZero,
-                "Lower triangular matrix is singular to working precision."));
+            return Err(Error::new(ErrorKind::DivByZero, "Lower triangular matrix is singular to working precision."));
         }
 
         // We have
@@ -345,8 +344,8 @@ fn back_substitution<T, M>(u: &M, y: Vector<T>) -> Result<Vector<T>, Error>
         // This is handy, because we have a very efficient
         // dot(., .) implementation!
         let dot = {
-            let row_part = &row.raw_slice()[(i + 1) .. n];
-            let x_part = &x.data()[(i + 1) .. n];
+            let row_part = &row.raw_slice()[(i + 1)..n];
+            let x_part = &x.data()[(i + 1)..n];
             utils::dot(row_part, x_part)
         };
 
@@ -361,20 +360,19 @@ fn back_substitution<T, M>(u: &M, y: Vector<T>) -> Result<Vector<T>, Error>
 /// Here, L is a square, lower triangular matrix and y
 /// is a vector which is dimensionally compatible with L.
 fn forward_substitution<T, M>(l: &M, y: Vector<T>) -> Result<Vector<T>, Error>
-    where T: Float,
-          M: BaseMatrix<T>
+where
+    T: Float,
+    M: BaseMatrix<T>,
 {
     assert!(l.rows() == l.cols(), "Matrix L must be square.");
-    assert!(y.size() == l.rows(),
-        "Matrix and RHS vector must be dimensionally compatible.");
+    assert!(y.size() == l.rows(), "Matrix and RHS vector must be dimensionally compatible.");
     let mut x = y;
 
     for (i, row) in l.row_iter().enumerate() {
         // TODO: Remove unsafe once `get` is available in `BaseMatrix`
         let divisor = unsafe { l.get_unchecked([i, i]).clone() };
         if divisor.abs() < T::epsilon() {
-            return Err(Error::new(ErrorKind::DivByZero,
-                "Lower triangular matrix is singular to working precision."));
+            return Err(Error::new(ErrorKind::DivByZero, "Lower triangular matrix is singular to working precision."));
         }
 
         // We have
@@ -387,8 +385,8 @@ fn forward_substitution<T, M>(l: &M, y: Vector<T>) -> Result<Vector<T>, Error>
         // This is handy, because we have a very efficient
         // dot(., .) implementation!
         let dot = {
-            let row_part = &row.raw_slice()[0 .. i];
-            let x_part = &x.data()[0 .. i];
+            let row_part = &row.raw_slice()[0..i];
+            let x_part = &x.data()[0..i];
             utils::dot(row_part, x_part)
         };
 
@@ -397,7 +395,10 @@ fn forward_substitution<T, M>(l: &M, y: Vector<T>) -> Result<Vector<T>, Error>
     Ok(x)
 }
 
-impl<'a, T> ColumnMut<'a, T> where T: Clone {
+impl<'a, T> ColumnMut<'a, T>
+where
+    T: Clone,
+{
     /// Clones the elements of the given slice of compatible size
     /// into this column.
     ///
@@ -427,7 +428,10 @@ impl<'a, T> ColumnMut<'a, T> where T: Clone {
     }
 }
 
-impl<'a, T> Column<'a, T> where T: Clone {
+impl<'a, T> Column<'a, T>
+where
+    T: Clone,
+{
     /// Clones the elements of this column into a
     /// slice of compatible size.
     ///
@@ -474,7 +478,10 @@ mod tests {
             let mut col = mat.col_mut(0);
             col.clone_from_slice(&v);
         }
-        assert_matrix_eq!(mat, matrix![5, 2;
-                                       6, 4]);
+        assert_matrix_eq!(
+            mat,
+            matrix![5, 2;
+                                       6, 4]
+        );
     }
 }
